@@ -21,7 +21,7 @@ langs=( [py]="# language: Python" [js]="// language: JavaScript" [java]="// lang
 # codellam-34b-v2
 model=codefuse-ai/CodeFuse-DeepSeek-33B
 model_name=CodeFuse-DeepSeek-33B
-generation_base_dir={replace-this-with-your-own-base-path}
+generation_base_dir=./
 
 
 if [ ! -d $generation_base_dir ]; then
