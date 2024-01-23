@@ -1,8 +1,6 @@
 import json
 from math import ceil
 
-from typing import List, Optional
-
 from accelerate.utils import set_seed
 from torch.utils.data.dataloader import DataLoader
 from transformers import StoppingCriteria, StoppingCriteriaList
@@ -39,19 +37,7 @@ class TooLongFunctionCriteria(StoppingCriteria):
         return input_ids.shape[1] > int(self.input_length * self.multiplier)
         
 
-def parallel_generations(
-        task,
-        dataset,
-        accelerator,
-        model,
-        tokenizer,
-        n_tasks,
-        args,
-        curr_sample_idx: int = 0,
-        save_every_k_tasks: int = -1,
-        intermediate_generations: Optional[List[Optional[List[Optional[str]]]]] = None,
-        intermediate_save_generations_path: Optional[str] = None,
-):
+def parallel_generations(task, dataset, accelerator, model, tokenizer, n_tasks, args):
     if args.load_generations_path:
         # load generated code
         with open(args.load_generations_path) as fp:
@@ -75,7 +61,7 @@ def parallel_generations(
     stopping_criteria = []
     # The input_length / start_length set to 0 for now will be adjusted later
     # Check if the task has a custom check_fn method for the stopping criteria
-    if task.stop_words and tokenizer.eos_token:
+    if task.stop_words is not None and tokenizer.eos_token:
         task.stop_words.append(tokenizer.eos_token)    
     if hasattr(task, "check_fn"):
         stopping_criteria.append(
@@ -114,10 +100,12 @@ def parallel_generations(
         tokenizer,
         num_devices=accelerator.state.num_processes,
         max_length=args.max_length_generation,
-        limit_start=args.limit_start + curr_sample_idx,
+        limit_start=args.limit_start,
         n_tasks=n_tasks,
         n_copies=n_copies,
         prefix=args.prefix,
+        suffix=args.suffix,
+        add_special_tokens=args.add_special_tokens,
         has_encoder=args.modeltype == "seq2seq",
         instruction_tokens=instruction_tokens,
     )
@@ -145,15 +133,13 @@ def parallel_generations(
         tokenizer,
         ds_loader,
         n_tasks=n_tasks,
-        limit_start=args.limit_start + curr_sample_idx,
+        limit_start=args.limit_start,
         batch_size=args.batch_size,
         prefix=args.prefix,
+        suffix=args.suffix,
         instruction_tokens=instruction_tokens,
         postprocess=args.postprocess,
         is_wrapped=is_loaded_in_8bit or is_loaded_in_4bit,
-        save_every_k_tasks=save_every_k_tasks,
-        intermediate_generations=intermediate_generations,
-        intermediate_save_generations_path=intermediate_save_generations_path,
         **gen_kwargs,
     )
     return generations

@@ -13,6 +13,16 @@ class EvalArguments:
             "help": "Prefix to add to the prompt. For example InCoder needs prefix='<| file ext=.py |>\n'"
         },
     )
+    suffix: Optional[str] = field(
+        default="",
+        metadata={
+            "help": "Suffix to add to the prompt. For example CodeFuse needs suffix='<|role_start|>bot<|role_end|>'"
+        },
+    )
+    add_special_tokens: Optional[bool] = field(
+        default=True,
+        metadata={"help": "option to control whether adding special tokens when tokenizing text"},
+    )
     do_sample: Optional[bool] = field(
         default=True,
         metadata={"help": "Sample from the language model's output distribution."},

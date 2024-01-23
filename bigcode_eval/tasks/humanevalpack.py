@@ -3,6 +3,8 @@ import re
 
 from evaluate import load
 from bigcode_eval.base import Task
+from datasets import load_dataset
+
 
 _CITATION = """
 @article{muennighoff2023octopack,
@@ -157,7 +159,8 @@ def create_task(language, name):
 
 class HumanEvalPack(Task):
     """Parent class for all HumanEvalPack tasks"""
-    DATASET_PATH = "bigcode/humanevalpack"
+    #DATASET_PATH = "bigcode/humanevalpack"
+    DATASET_PATH = "local_benchmarks/humanevalpack"
     DATASET_NAME = None
 
     def __init__(self, prompt="instruct", language="python", with_docs=True):
@@ -179,6 +182,8 @@ class HumanEvalPack(Task):
             stop_words = ["<BEF>", "<MSG>", "<DFF>", "\ No newline at end of file"]            
         stop_words.append("<|endoftext|>")
         self.with_docs = with_docs
+        # load local dataset
+        self.dataset = load_dataset(path=self.DATASET_PATH, name=self.DATASET_NAME)
         super().__init__(stop_words=stop_words, requires_execution=True)
 
     def get_dataset(self):
@@ -332,7 +337,7 @@ class HumanEvalPackGenerative(HumanEvalPack):
         :param references: list(str)
             list of str containing refrences
         """
-        code_metric = load("Muennighoff/code_eval_octopack")
+        code_metric = load("code_eval_octopack")
         timeout = LANGUAGE_TO_TIMEOUT[self.DATASET_NAME]
         num_workers = LANGUAGE_TO_NUM_WORKERS[self.DATASET_NAME]
         language = self.DATASET_NAME if self.DATASET_NAME != "js" else "javascript"

@@ -86,11 +86,18 @@ class GeneralMultiPLE(Task):
         self.language = language
         self.DATASET_NAME = f"humaneval-{language}"
         # we need the dataset to get stop words for each language
+        #self.dataset = load_dataset(
+        #    GeneralMultiPLE.DATASET_PATH,
+        #    self.DATASET_NAME,
+        #    revision=self.DATASET_REVISION)
+        # Change to local loading becuase we unable to access huggingface in our environment
         self.dataset = load_dataset(
-            GeneralMultiPLE.DATASET_PATH,
-            self.DATASET_NAME,
-            revision=self.DATASET_REVISION)
-        stop_words = self.dataset["test"][0]["stop_tokens"] + ["<file_sep>"]
+            'json', 
+            data_files=f'local_benchmarks/multipl-e/data/{self.DATASET_NAME}-reworded.jsonl',
+            split='train'
+        )
+        #stop_words = self.dataset["test"][0]["stop_tokens"]
+        stop_words = self.dataset['stop_tokens'][0]
         super().__init__(
             stop_words=stop_words,
             requires_execution=True,
@@ -98,7 +105,8 @@ class GeneralMultiPLE(Task):
 
     def get_dataset(self):
         """Returns dataset for the task or an iterable of any object, that get_prompt can handle"""
-        return self.dataset["test"]
+        #return self.dataset["test"]
+        return self.dataset
 
     def get_prompt(self, doc):
         """Builds the prompt for the LM to generate from."""
@@ -115,6 +123,20 @@ class GeneralMultiPLE(Task):
         # last string should be ""
         return "".join(string_list[:-2])
 
+    @staticmethod
+    def _stop_at_stop_token(decoded_string, stop_tokens):
+        """
+        Produces the prefix of decoded_string that ends at the first occurrence of
+        a stop_token.
+        WARNING: the decoded_string *must not* include the prompt, which may have stop tokens
+        itself.
+        """
+        min_stop_index = len(decoded_string)
+        for stop_token in stop_tokens:
+            stop_index = decoded_string.find(stop_token)
+            if stop_index != -1 and stop_index < min_stop_index:
+                min_stop_index = stop_index
+        return decoded_string[:min_stop_index]
 
     def postprocess_generation(self, generation, idx):
         """Defines the postprocessing for a LM generation.

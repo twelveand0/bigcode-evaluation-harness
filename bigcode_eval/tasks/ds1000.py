@@ -35,8 +35,8 @@ _CITATION = """
 def create_all_tasks():
     def create_task(key, mode):
         class DS1000(GeneralDS1000):
-            def __init__(self, **kwargs):
-                super().__init__(key, mode, **kwargs)
+            def __init__(self):
+                super().__init__(key, mode)
 
         return DS1000
 

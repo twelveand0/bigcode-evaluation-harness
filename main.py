@@ -1,4 +1,3 @@
-import os
 import fnmatch
 import json
 import warnings
@@ -110,11 +109,6 @@ def parse_args():
         help="Load model in 4bit",
     )
     parser.add_argument(
-        "--left_padding",
-        action="store_true",
-        help="Force left padding, needed for models like chatglm3-6b",
-    )
-    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -125,12 +119,6 @@ def parse_args():
         type=int,
         default=0,
         help="Optional offset to start from when limiting the number of samples",
-    )
-    parser.add_argument(
-        "--save_every_k_tasks",
-        type=int,
-        default=-1,
-        help="Optional saving after every k tasks",
     )
     parser.add_argument(
         "--postprocess",
@@ -171,12 +159,6 @@ def parse_args():
         help="Whether to save code generations",
     )
     parser.add_argument(
-        "--load_generations_intermediate_paths",
-        type=str,
-        nargs="*",
-        help="List of paths for saving the intermediate code generations",
-    )
-    parser.add_argument(
         "--save_generations_path",
         type=str,
         default="generations.json",
@@ -186,12 +168,6 @@ def parse_args():
         "--save_references",
         action="store_true",
         help="Whether to save reference solutions/tests",
-    )
-    parser.add_argument(
-        "--save_references_path",
-        type=str,
-        default="references.json",
-        help="Path for saving the references solutions/tests",
     )
     parser.add_argument(
         "--prompt",
@@ -210,6 +186,7 @@ def parse_args():
         action="store_true",
         help="Don't run generation but benchmark groundtruth (useful for debugging)",
     )
+
     return parser.parse_args()
 
 
@@ -231,6 +208,9 @@ def get_gpus_max_memory(max_memory, num_gpus):
 
 def main():
     args = parse_args()
+    print('===' * 20, 'ARGS', '===' * 20)
+    print('\n'.join([str(key) + ':' + str(value) for key,value in vars(args).items()]))
+    print('===' * 40)
     transformers.logging.set_verbosity_error()
     datasets.logging.set_verbosity_error()
 
@@ -316,25 +296,19 @@ def main():
             model.merge_and_unload()
             print("Merge complete.")
 
-        if args.left_padding:
-            # left padding is required for some models like chatglm3-6b
-            tokenizer = AutoTokenizer.from_pretrained(
-                args.model,
-                revision=args.revision,
-                trust_remote_code=args.trust_remote_code,
-                use_auth_token=args.use_auth_token,
-                padding_side="left",  
-            )
-        else:
-            # used by default for most models
-            tokenizer = AutoTokenizer.from_pretrained(
-                args.model,
-                revision=args.revision,
-                trust_remote_code=args.trust_remote_code,
-                use_auth_token=args.use_auth_token,
-                truncation_side="left",
-                padding_side="right",  
-            )
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model,
+            revision=args.revision,
+            trust_remote_code=args.trust_remote_code,
+            use_auth_token=args.use_auth_token,
+            truncation_side="left",
+            padding_side="right",  # padding on the right is needed to cut off padding in `complete_code`
+        )
+        if args.eos:
+            tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids(args.eos)
+            tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids(args.eos)
+            tokenizer.pad_token = args.eos
+            tokenizer.eos_token = args.eos
         if not tokenizer.eos_token:
             if tokenizer.bos_token:
                 tokenizer.eos_token = tokenizer.bos_token
@@ -360,42 +334,21 @@ def main():
 
         evaluator = Evaluator(accelerator, model, tokenizer, args)
 
-        if (
-            args.load_generations_intermediate_paths
-            and len(args.load_generations_intermediate_paths) != len(task_names)
-        ):
-            raise ValueError(
-                "If passing --load_generations_intermediate_paths, \
-                must pass equal number of files as number of tasks"
-            )
-
-        for idx, task in enumerate(task_names):
-            intermediate_generations = None
-            if args.load_generations_intermediate_paths:
-                with open(args.load_generations_intermediate_paths[idx], "r") as f_in:
-                    # intermediate_generations: list[list[str | None]] of len n_tasks
-                    # where list[i] = generated codes or empty
-                    intermediate_generations = json.load(f_in)
-
+        for task in task_names:
             if args.generation_only:
                 if accelerator.is_main_process:
                     print("generation mode only")
-                generations, references = evaluator.generate_text(
-                    task, intermediate_generations=intermediate_generations
-                )
+                generations, references = evaluator.generate_text(task)
                 if accelerator.is_main_process:
-                    save_generations_path = f"{os.path.splitext(args.save_generations_path)[0]}_{task}.json"
-                    save_references_path = f"references_{task}.json"
-                    evaluator.save_json_files(
-                        generations,
-                        references,
-                        save_generations_path,
-                        save_references_path,
-                    )
+                    with open(args.save_generations_path, "w") as fp:
+                        json.dump(generations, fp)
+                        print(f"generations were saved at {args.save_generations_path}")
+                    if args.save_references:
+                        with open("references.json", "w") as fp:
+                            json.dump(references, fp)
+                            print("references were saved")
             else:
-                results[task] = evaluator.evaluate(
-                    task, intermediate_generations=intermediate_generations
-                )
+                results[task] = evaluator.evaluate(task)
 
     # Save all args to config
     results["config"] = vars(args)

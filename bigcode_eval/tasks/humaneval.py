@@ -8,9 +8,13 @@ They were handwritten to ensure not to be included in the training set of code g
 Homepage: https://github.com/openai/human-eval
 """
 
+import re
+
+from evaluate import load
+from datasets import load_dataset
+
 
 from bigcode_eval.base import Task
-from bigcode_eval.tasks.custom_metrics.code_eval import compute_code_eval
 
 _CITATION = """
 @misc{chen2021evaluating,
@@ -34,8 +38,8 @@ def create_all_tasks():
 
 def create_task(strip_prompt):
     class HumanEval(GeneralHumanEval):
-        def __init__(self, **kwargs):
-            super().__init__(strip_prompt, **kwargs)
+        def __init__(self):
+            super().__init__(strip_prompt)
 
     return HumanEval
 
@@ -47,19 +51,22 @@ class GeneralHumanEval(Task):
 
     DATASET_PATH = "openai_humaneval"
 
-    def __init__(self, strip_prompt, k=[1, 10, 100], num_workers=16, timeout=3.0):
+    def __init__(self, strip_prompt):
         super().__init__(
-            stop_words=["\nclass", "\ndef", "\n#", "\n@", "\nprint", "\nif", "\n```", "<file_sep>"],
+            stop_words=["\nclass", "\ndef", "\n#", "\n@", "\nprint", "\nif", "\n```"],
             requires_execution=True,
         )
+        self.dataset = load_dataset(
+            'json', 
+            data_files=f'local_benchmarks/humaneval/humaneval.json',
+            split='train'
+        )
         self.strip_prompt = strip_prompt
-        self.k = k
-        self.num_workers = num_workers
-        self.timeout = timeout
 
     def get_dataset(self):
         """Returns dataset for the task or an iterable of any object, that get_prompt can handle"""
-        return self.dataset["test"]
+        #return self.dataset["test"]
+        return self.dataset
 
     def get_prompt(self, doc):
         """Builds the prompt for the LM to generate from."""
@@ -74,6 +81,20 @@ class GeneralHumanEval(Task):
         entry_point = f"check({doc['entry_point']})"
         return "\n" + test_func + "\n" + entry_point
 
+    @staticmethod
+    def _stop_at_stop_token(decoded_string, stop_tokens):
+        """
+        Produces the prefix of decoded_string that ends at the first occurrence of
+        a stop_token.
+        WARNING: the decoded_string *must not* include the prompt, which may have stop tokens
+        itself.
+        """
+        min_stop_index = len(decoded_string)
+        for stop_token in stop_tokens:
+            stop_index = decoded_string.find(stop_token)
+            if stop_index != -1 and stop_index < min_stop_index:
+                min_stop_index = stop_index
+        return decoded_string[:min_stop_index]
 
     def postprocess_generation(self, generation, idx):
         """Defines the postprocessing for a LM generation.
@@ -83,8 +104,11 @@ class GeneralHumanEval(Task):
             index of doc in the dataset to which the generation belongs
             (not used for Humaneval-Task)
         """
-        prompt = self.get_prompt(self.dataset["test"][idx])
+        #prompt = self.get_prompt(self.dataset["test"][idx])
+        prompt = self.get_prompt(self.dataset[idx])
         generation = generation[len(prompt) :]
+        #print(f'\n*********In hv postprocess:\nPrompt:{prompt}\nGeneration:{generation}')
+
         return prompt + self._stop_at_stop_token(generation, self.stop_words)
 
     def process_results(self, generations, references):
@@ -95,11 +119,9 @@ class GeneralHumanEval(Task):
         :param references: list(str)
             list of str containing refrences
         """
-        results, _ = compute_code_eval(
+        code_metric = load("code_eval")
+        results, _ = code_metric.compute(
             references=references,
             predictions=generations,
-            k=self.k,
-            num_workers=self.num_workers,
-            timeout=self.timeout,
         )
         return results
