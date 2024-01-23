@@ -165,6 +165,6 @@ cython_debug/
 
 # Script outputs
 evaluation*.json
-generations*.json
+#generations*.json
 
 playground/
