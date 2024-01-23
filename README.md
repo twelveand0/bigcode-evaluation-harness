@@ -1,213 +1,227 @@
 <h1 align="center">Code Generation LM Evaluation Harness</h1>
 
 
-<h4 align="center">
-    <p>
-        <a href="#features">Tasks</a> |
-        <a href="#setup">Usage</a> |
-        <a href="#implementing-new-tasks">Contribution</a> |
-        <a href="#documentation">Documentation</a> |
-        <a href="https://huggingface.co/bigcode">BigCode</a>
-    <p>
-</h4>
-
 <h3 align="center">
     <img style="float: middle; padding: 10px 10px 10px 10px;" width="50" height="50" src="https://user-images.githubusercontent.com/44069155/191557209-6219acb8-a766-448c-9bd6-284d22b1e398.png" /></a>
 </h3>
 
-## Features
+## Abstract
 
-This is a framework for the evaluation of code generation models. This work is inspired from [EleutherAI/lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) for evaluating language models in general. We welcome contributions to fix issues, enhance features and add new benchmarks. You can find contribution guides in [`docs/guide.md`](https://github.com/bigcode-project/bigcode-evaluation-harness/blob/main/docs/guide.md) and [`CONTRIBUTING.md`](https://github.com/bigcode-project/bigcode-evaluation-harness/blob/main/CONTRIBUTING.md) and more documentation in [`docs/README.md`](https://github.com/bigcode-project/bigcode-evaluation-harness/blob/main/docs/README.md). 
+This is forked from [bigcode-project/bigcode-evaluation-harness](https://github.com/bigcode-project/bigcode-evaluation-harness). Thanks for their great work! This forked repo is mainly used to reproduce our generation&evaluation results submitted to [bigcode/bigcode-models-leaderboard](https://huggingface.co/spaces/bigcode/bigcode-models-leaderboard). 
 
-Below are the features and tasks of this framework:
+## Changes
 
-- Features:
-    - Any autoregressive model available on [Hugging Face hub](https://huggingface.co/) can be used, but we recommend using code generation models trained specifically on Code such as [SantaCoder](https://huggingface.co/bigcode/santacoder), [InCoder](https://huggingface.co/facebook/incoder-6B) and [CodeGen](https://huggingface.co/Salesforce/codegen-16B-mono).
-    - We provide Multi-GPU text generation with `accelerate` and Dockerfiles for evaluating on Docker containers for security and reproducibility.
+To align with the model [codefuse-ai/CodeFuse-DeepSeek-33B](https://huggingface.co/codefuse-ai/CodeFuse-DeepSeek-33B), we have primarily implemented the following modifications that require clarification:
 
-- Tasks:
-    - 5 code generation **Python** tasks (with unit tests): [HumanEval](https://huggingface.co/datasets/openai_humaneval), [InstructHumanEval](https://huggingface.co/datasets/codeparrot/instructhumaneval), [APPS](https://huggingface.co/datasets/codeparrot/apps), [MBPP](https://huggingface.co/datasets/mbpp) and [DS-1000](https://github.com/HKUNLP/DS-1000/) for both completion (left-to-right) and insertion (FIM) mode.
-    - [HumanEvalPack](https://huggingface.co/datasets/bigcode/humanevalpack) extends HumanEval to **3** scenarios across **6** languages via human translations and was released with [OctoPack](https://arxiv.org/abs/2308.07124).
-    - [MultiPL-E](https://github.com/nuprl/MultiPL-E) evaluation suite (HumanEval translated into **18** programming languages).
-    - [Recode](https://github.com/amazon-science/recode/tree/main) applied to the HumanEval benchmark. It evaluates the robustness of code-generation models.
-    - [Pal](https://github.com/reasoning-machines/pal) Program-aided Language Models evaluation for grade school math problems : [GSM8K](https://huggingface.co/datasets/gsm8k) and [GSM-HARD](https://huggingface.co/datasets/reasoning-machines/gsm-hard). These problems are solved by generating reasoning chains of text and code.
-    - Code to text task from [CodeXGLUE](https://huggingface.co/datasets/code_x_glue_ct_code_to_text) (zero-shot & fine-tuning) for 6 languages: **Python, Go, Ruby, Java, JavaScript and PHP.**  Documentation translation task from [CodeXGLUE](https://huggingface.co/datasets/code_x_glue_tt_text_to_text).
-    - [CoNaLa](https://huggingface.co/datasets/neulab/conala) for **Python** code generation (2-shot setting and evaluation with BLEU score).
-    - [Concode](https://huggingface.co/datasets/code_x_glue_tc_text_to_code) for **Java** code generation (2-shot setting and evaluation with BLEU score).
-    - 3 multilingual downstream classification tasks: [Java Complexity prediction](https://huggingface.co/datasets/codeparrot/codecomplex), [Java code equivalence prediction](https://huggingface.co/datasets/code_x_glue_cc_clone_detection_big_clone_bench), [C code defect prediction](https://huggingface.co/datasets/code_x_glue_cc_defect_detection).
+1. The inferring format we used is as follows:
+```
+<s>human
+{LANGUAGE TAG}
+{RAW PROMPT}
+<s>bot
 
-More details about each task can be found in  the documentation in [`docs/README.md`](https://github.com/bigcode-project/bigcode-evaluation-harness/blob/main/docs/README.md).
-## Setup
+```
+Here is an example:
+
+```python
+<s>human
+# language: Python
+from typing import List
+def separate_paren_groups(paren_string: str) -> List[str]:
+    """ Input to this function is a string containing multiple groups of nested parentheses. Your goal is to
+    separate those group into separate strings and return the list of those.
+    Separate groups are balanced (each open brace is properly closed) and not nested within each other
+    Ignore any spaces in the input string.
+    >>> separate_paren_groups('( ) (( )) (( )( ))')
+    ['()', '(())', '(()())']
+    """
+<s>bot
+
+```
+
+2. We discovered that the existing code supports the ```prefix``` parameter; however, we couldn't find a suitable way to properly add our suffix ```\n\<s\>bot\n```. As a result, we made modifications to the code by adding a ```suffix``` parameter and also updated the post-processing code to remove this suffix from the directly generated results.
+
+3. Due to setting the parameter ```add_special_tokens=False``` explicitly during the fine-tuning of our model's tokenization, this parameter significantly affects our generation results (approximately 3%). As a result, we have added an ```add_special_tokens``` parameter and set it to ```False```.
+
+4. The generated results we submitted this time were produced using the greedy decoding mode (i.e., ```do_sample=False, num_beams=1, num_return_sequences=1```).
+
+5. Due to our inability to access HuggingFace online, except through a browser, we encountered a hurdle preventing the direct loading of benchmarks in online mode. Consequently, we opted for an offline loading approach. Specifically, modifications were applied to ```bigcode_eval/tasks/humaneval.py``` and ```bigcode_eval/tasks/multiple.py```. For further details on the changes, please refer to commit [0fa80e5](https://github.com/twelveand0/bigcode-evaluation-harness/commit/0fa80e5254b812ad3e162d3af1757e9644d8d1c7).
+
+## Reproduce
+
+### Setup
+
+Clone the repository and create two folders ```generations_$model``` and ```metrics_$model``` where you will save the generated code and the metrics respectively for your model ```$model```.
 
 ```bash
-git clone https://github.com/bigcode-project/bigcode-evaluation-harness.git
+git clone https://github.com/twelveand0/bigcode-evaluation-harness.git
 cd bigcode-evaluation-harness
-```
-Install [`torch`](https://pytorch.org/get-started/locally/) based on your device type, and install the other packages using:
-```
-pip install -e .
-```
-To run the `DS-1000` benchmark, additional constraints must be resolved.
-```
-# python version must be 3.7.10
-pip install -e ".[ds1000]" # installs all additional dependencies except PyTorch
-# torch==1.12.1 required. Download version with relevant GPU support etc., e.g.,
-pip install torch==1.12.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116
-
-# to suppress any tensorflow optimization warnings, 
-# precede call to "accelerate launch" with "TF_CPP_MIN_LOG_LEVEL=3"
-
-# on some systems, tensorflow will attempt to allocate all GPU memory
-# to its process at import which will raise a CUDA out-of-memory error
-# setting "export TF_FORCE_GPU_ALLOW_GROWTH=true" resolves this
-```
-Also make sure you have `git-lfs` installed and are logged in the Hub
-```
-huggingface-cli login
-````
-
-We use [`accelerate`](https://huggingface.co/docs/accelerate/index) to generate code/text in parallel when multiple GPUs are present (multi-GPU mode). You can configure it using:
-
-```bash
-accelerate config
+mkdir generations_$model
+mkdir metrics_$model
 ```
 
-This evaluation harness can also be used in an evaluation only mode, you can use a Multi-CPU setting. For large models, we recommend specifying the precision of the model using the `--precision` flag instead of accelerate config to have only one copy of the model in memory. You can also load models in 8bit with the flag `--load_in_8bit` or 4bit with `--load_in_4bit` if you have `bitsandbytes` installed with the required transformers and accelerate versions.
+To run the evaluation, we first generate the code solutions for the target tasks on GPUs, then execute the code on a docker container (only cpus are needed).
 
-The evaluation part (solutions execution) for [MultiPL-E](https://github.com/nuprl/MultiPL-E) requires extra dependencies for some programming languages, we provide a Dockerfile with all dependencies, see section [Docker](#docker-containers) for more details.
+### Generation
 
-## Usage
-You can use this evaluation harness to generate text solutions to code benchmarks with your model, to evaluate (and execute) the solutions or to do both. While it is better to use GPUs for the generation, the evaluation only requires CPUs. So it might be beneficial to separate these two steps. By default both generation and evaluation are performed.
+We generate code solutions using the script ```generate.sh```. Simply execute this script in bash:
 
-For more details on how to evaluate on the tasks, please refer to the documentation in [`docs/README.md`](https://github.com/bigcode-project/bigcode-evaluation-harness/blob/main/docs/README.md). 
-
-### Generation and evaluation
-Below is an example to generate and evaluate on a task.
-
-```bash
-accelerate launch  main.py \
-  --model <MODEL_NAME> \
-  --tasks <TASK_NAME> \
-  --limit <NUMBER_PROBLEMS> \
-  --max_length_generation <MAX_LENGTH> \
-  --temperature <TEMPERATURE> \
-  --do_sample True \
-  --n_samples 100 \
-  --batch_size 10 \
-  --precision <PRECISION> \
-  --allow_code_execution \
-  --save_generations
-```
-* `limit` represents the number of problems to solve, if it's not provided all problems in the benchmark are selected. 
-* `allow_code_execution` is for executing the generated code: it is off by default, read the displayed warning before calling it to enable execution. 
-* Some models with custom code on the HF hub like [SantaCoder](https://huggingface.co/bigcode/santacoder) require calling `--trust_remote_code`, for private models add `--use_auth_token`.
-* `save_generations` saves the post-processed generations in a json file at `save_generations_path` (by default `generations.json`). You can also save references by calling `--save_references`
-* `max_length_generation` is the maximum token length of generation including the input token length. The default is 512, but for some tasks like GSM8K and GSM-Hard, the complete prompt with 8 shot examples (as used in [PAL](https://github.com/reasoning-machines/pal)) take up `~1500` tokens, hence the value should be greater than that and the recommended value of `max_length_generation` is `2048` for these tasks.
-
-Some tasks don't require code execution such as
-`codexglue_code_to_text-<LANGUAGE>`/`codexglue_code_to_text-python-left`/`conala`/`concode` that use BLEU evaluation. In addition, we generate one candidate solution for each problem in these tasks, so use `n_samples=1` and `batch_size=1`. (Note that `batch_size` should always be equal or less than `n_samples`).
-* For APPS tasks, you can use `n_samples=1` for strict and average accuracies (from the original APPS paper) and `n_samples>1` for pass@k.
-
-### Generation only
-
-If you want to generate solutions without executing and evaluating the code, call `--generation_only`, in addition to the instructions above. This will save the solutions in a json file provided in `save_generation_path` in the working directory. 
-
-This can be useful if you don't want to execute code in the machine you're using for generations for security or efficiency reasons. For instance, you can do the generations on multiple GPUs, but switch to a multiple workers CPU machine or docker container for the execution.
-
-### Evaluation only
-
-If you already have the generations in a json file from this evaluation harness and want to evaluate them, specify the path of the generations via the `load_generations_path` argument. You may need to reconfigure `accelerate` to use multiple CPUs.
-
-Below is an example, be mind of specifying arguments proper to the task you are evaluating on, and note that `model` value here only serves for documenting the experiment. Also add `--n_samples` to specify the number of samples to evaluate per problem (usually the same value used in generation).
-
-```bash
-accelerate launch  main.py   --tasks mbpp  --allow_code_execution  --load_generations_path generations.json  --model incoder-temperature-08
+```shell
+bash generate.sh
 ```
 
-## Docker containers
-For safety, we provide a Dockerfiles to do the execution inside a docker container. To do that, first, do the generation on your machine and save them in `generations.json` for example by adding the flag `--generation_only` to the command. Then use the Docker image that we provide:
+The contents of this script are as follows:
 
-```bash
-$ docker pull ghcr.io/bigcode-project/evaluation-harness
-$ docker tag ghcr.io/bigcode-project/evaluation-harness evaluation-harness
+```shell
+pip install transformers==4.33.2
+
+N_NODE=1
+N_GPU_PER_NODE=1
+batch_size=1
+n_samples=1
+eos_token="<｜end▁of▁sentence｜>"
+
+declare -A langs
+langs=( [py]="# language: Python" [js]="// language: JavaScript" [java]="// language: Java" [cpp]="// language: C++" [swift]="// language: Swift" [php]="// language: PHP" [jl]="# language: Julia" [lua]="// language: Lua" [r]="# language: R" [rkt]="; language: Racket" [rs]="// language: Rust" [d]="" )
+
+# codellam-34b-v2
+model=codefuse-ai/CodeFuse-DeepSeek-33B
+model_name=CodeFuse-DeepSeek-33B
+generation_base_dir={replace-this-with-your-own-base-path}
+
+if [ ! -d $generation_base_dir ]; then
+    mkdir $generation_base_dir
+fi
+
+# F2 format
+bot_tag="<s>bot"
+human_tag="<s>human"$'\n'
+
+for lang in "${!langs[@]}"; do
+    prefix="${human_tag}${langs[$lang]}"
+    echo "For language $lang, the prefix is: $prefix"
+    # use humaneval for py and multipl-e for the rest
+    if [ "$lang" == "py" ]; then
+        task=humaneval
+    elif [ "$lang" == "mbpp" ]; then
+        task=mbpp
+    else
+        task=multiple-$lang
+    fi
+    generations_path=$generation_base_dir/generations_$model_name/generations_$task\_$model_name.json
+    
+    if [ ! -d $generation_base_dir/generations_$model_name ]; then
+        mkdir $generation_base_dir/generations_$model_name
+    fi
+
+    echo "start to launch ...."
+    accelerate launch \
+            --num_machines $N_NODE \
+            --num_processes $(($N_NODE*$N_GPU_PER_NODE)) \
+            main.py \
+                --model $model \
+                --task $task \
+                --n_samples $n_samples \
+                --batch_size $batch_size \
+                --max_length_generation 2000 \
+                --do_sample False \
+                --temperature 0.2 \
+                --precision bf16 \
+                --eos "$eos_token" \
+                --seed 999999999 \
+                --add_special_tokens False \
+                --trust_remote_code \
+                --generation_only \
+                --save_generations_path $generations_path \
+                --prefix "$prefix"$'\n' \
+                --suffix $'\n'"$bot_tag"$'\n'
+    
+    echo "Task $task done"
+done
 ```
 
-If you want to evaluate on MultiPL-E, we have a different Dockerfile since it requires more dependencies, use:
-```bash
-$ docker pull ghcr.io/bigcode-project/evaluation-harness-multiple
-$ docker tag ghcr.io/bigcode-project/evaluation-harness-multiple evaluation-harness-multiple
-```
+This will generate and save the code solutions for all tasks in the ```generations_$model``` folder.
 
+### Evaluation
 
-### Building  Docker images
-
-If you modify the evaluation harness, you may want to rebuild the docker images.
-
-Here's how to build a docker image for the evaluation harness:
-```bash
-$ sudo make DOCKERFILE=Dockerfile  all
-```
-This creates an image called `evaluation-harness`, and runs a test on it. To skip the test remove `all` form the command.
-
-For MultiPL-E:
-```bash
-$ sudo make DOCKERFILE=Dockerfile-multiple all
-```
-This creates an image called `evaluation-harness-multiple`.
-
-### Evaluating inside a container
-Suppose you generated text with the `bigcode/santacoder` model and saved it in `generations_py.json` with:
-```bash
-accelerate launch  main.py \
-    --model bigcode/santacoder  \
-    --tasks multiple-py  \
-    --max_length_generation 650 \
-    --temperature 0.8   \
-    --do_sample True  \
-    --n_samples 200  \
-    --batch_size 200  \
-    --trust_remote_code \
-    --generation_only \
-    --save_generations \
-    --save_generations_path generations_py.json
-```
-
-To run the container (here from image `evaluation-harness-multiple`) to evaluate on `generations_py.json`, or another file mount it with `-v`, specify `n_samples` and allow code execution with `--allow_code_execution` (and add the number of problems `--limit`  if it was used during generation):
-```bash
-$ sudo docker run -v $(pwd)/generations_py.json:/app/generations_py.json:ro -it evaluation-harness-multiple python3 main.py \
-    --model bigcode/santacoder \
-    --tasks multiple-py \
-    --load_generations_path /app/generations_py.json \
-    --allow_code_execution  \
-    --temperature 0.8 \
-    --n_samples 200
-```
-
-## Implementing new tasks
-To implement a new task in this evaluation harness, see the guide in [`docs/guide`](https://github.com/bigcode-project/bigcode-evaluation-harness/blob/main/docs/guide.md). The are also contribution guidelines in this [`CONTRIBUTING.md`](https://github.com/bigcode-project/bigcode-evaluation-harness/blob/main/CONTRIBUTING.md)
-
-## Documentation
-We provide documentation for the existing benchmarks and how to run the evaluation in [`docs/README.md`](https://github.com/bigcode-project/bigcode-evaluation-harness/blob/main/docs/README.md).
-
-## Remarks
-* Currenltly, we use data parallel evaluation across multiple GPUs using `accelerate`, this assumes that you can fit the model in one GPU. 
-
-## Acknowledgements
-We thank EleutherAI for their work on the [lm-evaluation harness](https://github.com/EleutherAI/lm-evaluation-harness) from which this repository is inspired.
-
-## Cite as
+We execute and evaluate the solutions inside a docker container, you can either build the image or pull the one we provide:
 
 ```
-@misc{bigcode-evaluation-harness,
-  author       = {Ben Allal, Loubna and
-                  Muennighoff, Niklas and
-                  Kumar Umapathi, Logesh and
-                  Lipkin, Ben and
-                  von Werra, Leandro},
-  title = {A framework for the evaluation of code generation models},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/bigcode-project/bigcode-evaluation-harness}},
-  year = 2022,
-}
+# to build it:
+# sudo make DOCKERFILE=Dockerfile-multiple all
+sudo docker pull ghcr.io/bigcode-project/evaluation-harness-multiple
+sudo docker tag ghcr.io/bigcode-project/evaluation-harness-multiple evaluation-harness-multiple
 ```
+
+Then, you can run the evaluation script ```evaluate.sh```:
+
+```shell
+bash evaluate.sh
+```
+
+The content of this evaluation script is:
+
+```shell
+declare -A langs
+langs=( [py]="# language: Python" [js]="// language: JavaScript" [java]="// language: Java" [cpp]="// language: C++" [swift]="// language: Swift" [php]="// language: PHP" [jl]="# language: Julia" [lua]="// language: Lua" [r]="# language: R" [rkt]="; language: Racket" [rs]="// language: Rust" [d]="" )
+
+model=CodeFuse-DeepSeek-33B
+org=codefuse-ai
+# if you provide absolute paths remove the $(pwd) from the command below
+generations_path=generations_$model
+metrics_path=metrics_$model
+
+eos_token="\"<｜end▁of▁sentence｜>\""
+human_tag="<s>human"$'\n'
+bot_tag="\"<s>bot\""
+batch_size=1
+
+for lang in "${!langs[@]}"; do
+    prefix="${human_tag}${langs[$lang]}"
+    echo "For language $lang, the prefix is: $prefix"
+    if [ "$lang" == "py" ]; then
+        task=humaneval
+    elif [ "$lang" == "mbpp" ]; then
+        task=mbpp
+    else
+        task=multiple-$lang
+    fi
+
+    gen_suffix=generations_$task\_$model.json
+    metric_suffix=metrics_$task\_$model.json
+    echo "Evaluation of $model on $task benchmark, data in $generations_path/$gen_suffix"
+
+    sudo docker run -v $(pwd):/app/newcode -v $(pwd)/$generations_path/$gen_suffix:/app/$gen_suffix:ro  -v $(pwd)/$metrics_path:/app/$metrics_path -it evaluation-harness-multiple bash -c "cd /app/newcode && python3 main.py \
+        --model $org/$model \
+        --tasks $task \
+        --load_generations_path /app/$gen_suffix \
+        --metric_output_path /app/$metrics_path/$metric_suffix \
+        --allow_code_execution  \
+        --trust_remote_code \
+        --use_auth_token \
+        --temperature 0.2 \
+        --max_length_generation 2000 \
+        --do_sample False \
+        --precision bf16 \
+        --eos "$eos_token" \
+        --seed 999999999 \
+        --add_special_tokens False \
+        --batch_size $batch_size \
+        --prefix '$prefix'$'\n' \
+        --suffix $'\n'"$bot_tag"$'\n' \
+        --n_samples 1 | tee -a logs_$model.txt"
+    echo "Task $task done, metric saved at $metrics_path/$metric_suffix"
+done
+```
+
+### Summrize
+
+If you followed the steps above you now have a folder ```metrics_$model``` with json files, each containing the result of one task. To submit the results to the LeaderBoard, you need to create a json summarizing these metrics using ```leaderboard/group_jsons.py```:
+
+```shell
+python group_jsons.py --metrics_path metrics_$model --model $model --org $org --username $your_hf_username
+```
+
+## More
+
+For more information, you can visit [bigcode-project/bigcode-evaluation-harness](https://github.com/bigcode-project/bigcode-evaluation-harness).
