@@ -11,7 +11,7 @@ This is forked from [bigcode-project/bigcode-evaluation-harness](https://github.
 
 ## Changes
 
-In order to adapt to the model [codefuse-ai/CodeFuse-DeepSeek-33B](https://huggingface.co/codefuse-ai/CodeFuse-DeepSeek-33B), we have mainly made the following changes that need to clarity:
+To align with the model [codefuse-ai/CodeFuse-DeepSeek-33B](https://huggingface.co/codefuse-ai/CodeFuse-DeepSeek-33B), we have primarily implemented the following modifications that require clarification:
 
 1. The inferring format we used is as follows:
 ```
@@ -45,7 +45,7 @@ def separate_paren_groups(paren_string: str) -> List[str]:
 
 4. The generated results we submitted this time were produced using the greedy decoding mode (i.e., ```do_sample=False, num_beams=1, num_return_sequences=1```).
 
-5. Because we cannot access HuggingFace online (with the browser being the exception), leding to a hiccup where I can't load the benchmarks directly in online mode, We switched to an offline loading approach. Specially, we have made changes to ```bigcode_eval/tasks/humaneval.py```, ```bigcode_eval/tasks/multiple.py```. Change details can be found in commit [0fa80e5](https://github.com/twelveand0/bigcode-evaluation-harness/commit/0fa80e5254b812ad3e162d3af1757e9644d8d1c7).
+5. Due to our inability to access HuggingFace online, except through a browser, we encountered a hurdle preventing the direct loading of benchmarks in online mode. Consequently, we opted for an offline loading approach. Specifically, modifications were applied to ```bigcode_eval/tasks/humaneval.py``` and ```bigcode_eval/tasks/multiple.py```. For further details on the changes, please refer to commit [0fa80e5](https://github.com/twelveand0/bigcode-evaluation-harness/commit/0fa80e5254b812ad3e162d3af1757e9644d8d1c7).
 
 ## Reproduce
 
@@ -64,13 +64,13 @@ To run the evaluation, we first generate the code solutions for the target tasks
 
 ### Generation
 
-We generate code solutions through the script ```generate.sh```, you can just run this script in bash:
+We generate code solutions using the script ```generate.sh```. Simply execute this script in bash:
 
 ```shell
 bash generate.sh
 ```
 
-The content of this script is：
+The contents of this script are as follows:
 
 ```shell
 pip install transformers==4.33.2
@@ -224,4 +224,4 @@ python group_jsons.py --metrics_path metrics_$model --model $model --org $org --
 
 ## More
 
-You can go to [bigcode-project/bigcode-evaluation-harness](https://github.com/bigcode-project/bigcode-evaluation-harness) for more information.
+For more information, you can visit [bigcode-project/bigcode-evaluation-harness](https://github.com/bigcode-project/bigcode-evaluation-harness).
